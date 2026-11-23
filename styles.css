@@ -162,3 +162,6 @@ body.pdf-search-hide-navbar-search.is-mobile .mobile-navbar-action:has(svg.lucid
 body.pdf-search-hide-navbar-search.is-mobile .mobile-navbar-action:has(svg.search) {
 	display: none;
 }
+.pdf-search-hidden-navbar-btn {
+	display: none !important;
+}

@@ -111,7 +111,18 @@ export default class PdfSearchPlugin extends Plugin {
 			},
 		});
 
+		this.addCommand({
+			id: "copy-bottom-bar-info",
+			name: "Troubleshooting: copy bottom bar details",
+			callback: () => this.copyBottomBarInfo(),
+		});
+
 		this.addSettingTab(new PdfSearchSettingTab(this.app, this));
+
+		// Re-check the bottom bar whenever the layout changes, in case Obsidian rebuilt it.
+		this.app.workspace.onLayoutReady(() => this.hideNavbarSearchButtons());
+		this.registerEvent(this.app.workspace.on("layout-change", () => this.hideNavbarSearchButtons()));
+		this.registerEvent(this.app.workspace.on("active-leaf-change", () => this.hideNavbarSearchButtons()));
 
 		// Hide the Previous / Next bar when you leave the PDFs you were searching.
 		this.registerEvent(
@@ -134,6 +145,7 @@ export default class PdfSearchPlugin extends Plugin {
 
 	onunload() {
 		document.body.removeClass(HIDE_SEARCH_CLASS);
+		document.querySelectorAll("." + HIDDEN_BTN_CLASS).forEach((el) => el.removeClass(HIDDEN_BTN_CLASS));
 		this.cache.clear();
 		this.removeNavBars();
 		this.stopKeepingHighlight();
@@ -359,9 +371,66 @@ export default class PdfSearchPlugin extends Plugin {
 		return found;
 	}
 
-	/** Turn on or off the CSS that hides Obsidian's search button in the mobile bottom bar. */
+	/** Turn on or off hiding Obsidian's search button in the mobile bottom bar. */
 	applyBodyClasses() {
 		document.body.toggleClass(HIDE_SEARCH_CLASS, this.settings.hideMobileSearchButton);
+		if (this.settings.hideMobileSearchButton) {
+			this.hideNavbarSearchButtons();
+			// Obsidian may build or rebuild the bar after the plugin loads.
+			window.setTimeout(() => this.hideNavbarSearchButtons(), 500);
+			window.setTimeout(() => this.hideNavbarSearchButtons(), 2000);
+		} else {
+			document.querySelectorAll("." + HIDDEN_BTN_CLASS).forEach((el) => el.removeClass(HIDDEN_BTN_CLASS));
+		}
+	}
+
+	/** Magnifying-glass icons sitting in the bar along the bottom of the screen (not in dialogs or the PDF). */
+	private bottomBarSearchIcons(): SVGElement[] {
+		const h = window.innerHeight;
+		const out: SVGElement[] = [];
+		document.querySelectorAll<SVGElement>("svg").forEach((svg) => {
+			const cls = svg.getAttribute("class") ?? "";
+			if (!/(^|\s)(lucide-)?search(\s|$)/.test(cls)) return;
+			if (svg.closest(".modal-container, .pdf-search-nav, .mobile-toolbar, .pdf-toolbar, .menu, .suggestion-container")) return;
+			const r = svg.getBoundingClientRect();
+			if (!r.width || r.top < h - 160) return;
+			out.push(svg);
+		});
+		return out;
+	}
+
+	/** Hide Obsidian's search button in the mobile bottom bar, found by its icon and position. */
+	hideNavbarSearchButtons() {
+		if (!Platform.isMobile || !this.settings.hideMobileSearchButton) return;
+		for (const svg of this.bottomBarSearchIcons()) {
+			const btn = (svg.closest("button, .clickable-icon, [role='button'], .mobile-navbar-action") ??
+				svg.parentElement) as HTMLElement | null;
+			btn?.addClass(HIDDEN_BTN_CLASS);
+		}
+	}
+
+	/** For troubleshooting: describe what is in the bottom bar and copy it to the clipboard. */
+	async copyBottomBarInfo() {
+		const h = window.innerHeight;
+		const lines: string[] = [`v${this.manifest.version} mobile=${Platform.isMobile} h=${h} hide=${this.settings.hideMobileSearchButton}`];
+		const describe = (el: Element | null) =>
+			el ? `${el.tagName.toLowerCase()}.${(el.getAttribute("class") ?? "").trim().replace(/\s+/g, ".")}` +
+				(el.getAttribute("aria-label") ? `[${el.getAttribute("aria-label")}]` : "") : "";
+		document.querySelectorAll<SVGElement>("svg").forEach((svg) => {
+			const r = svg.getBoundingClientRect();
+			if (!r.width || r.top < h - 160) return;
+			const chain: string[] = [];
+			let el: Element | null = svg;
+			for (let i = 0; i < 4 && el; i++, el = el.parentElement) chain.push(describe(el));
+			lines.push(chain.join(" < "));
+		});
+		const text = lines.join("\n");
+		try {
+			await navigator.clipboard.writeText(text);
+			new Notice("Bottom bar details copied. Paste them to whoever is helping you.");
+		} catch {
+			new Notice(text, 15000);
+		}
 	}
 
 	async loadSettings() {
@@ -375,6 +444,7 @@ export default class PdfSearchPlugin extends Plugin {
 
 const ALL = "__all__";
 const HIDE_SEARCH_CLASS = "pdf-search-hide-navbar-search";
+const HIDDEN_BTN_CLASS = "pdf-search-hidden-navbar-btn";
 
 class PdfSearchModal extends Modal {
 	private inputEl!: HTMLInputElement;

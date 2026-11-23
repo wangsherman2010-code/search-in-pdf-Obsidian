@@ -1,7 +1,7 @@
 {
   "id": "pdf-search-in-note",
   "name": "PDF Search in Note",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "minAppVersion": "1.4.0",
   "description": "Search inside only the PDF files linked or embedded in the current note. Works on desktop and mobile.",
   "author": "wangsherman2010-code",
