@@ -15,7 +15,7 @@ import {
 	loadPdfJs,
 } from "obsidian";
 import { Match, PageText, findMatches, makeSnippet } from "./search";
-import { clearHighlights, highlightWhenReady } from "./highlight";
+import { clearHighlights, highlightWhenReady, keepHighlight } from "./highlight";
 
 interface PdfSearchSettings {
 	ignoreWhitespace: boolean;
@@ -69,6 +69,9 @@ export default class PdfSearchPlugin extends Plugin {
 	lastNotePath = "";
 	nav: NavState | null = null;
 	private highlightToken = 0;
+	/** stops re-drawing the current highlight after zoom; null when nothing is kept */
+	private stopKeeping: (() => void) | null = null;
+	private keptFilePath = "";
 
 	async onload() {
 		await this.loadSettings();
@@ -110,6 +113,8 @@ export default class PdfSearchPlugin extends Plugin {
 		// Hide the Previous / Next bar when you leave the PDFs you were searching.
 		this.registerEvent(
 			this.app.workspace.on("file-open", (file) => {
+				// Stop re-drawing the highlight once another file is shown.
+				if (this.keptFilePath && file?.path !== this.keptFilePath) this.stopKeepingHighlight();
 				if (!this.nav) return;
 				if (!file || !this.nav.results.some((r) => r.file.path === file.path)) this.removeNavBars();
 			}),
@@ -127,6 +132,7 @@ export default class PdfSearchPlugin extends Plugin {
 	onunload() {
 		this.cache.clear();
 		this.removeNavBars();
+		this.stopKeepingHighlight();
 		document.querySelectorAll(".pdf-search-hit-layer").forEach((el) => el.remove());
 	}
 
@@ -231,6 +237,7 @@ export default class PdfSearchPlugin extends Plugin {
 	/** Open the PDF at `page`, then highlight the `occurrence`-th match of `query` on that page. */
 	async openResult(file: TFile, page: number, sourcePath: string, query: string, occurrence: number) {
 		const token = ++this.highlightToken;
+		this.stopKeepingHighlight();
 		const subpath = `#page=${page}`;
 		// Reuse a tab that already shows this PDF.
 		let existing: WorkspaceLeaf | null = null;
@@ -259,7 +266,19 @@ export default class PdfSearchPlugin extends Plugin {
 			8000,
 			() => token === this.highlightToken,
 		);
-		if (!ok) console.debug("PDF Search: could not find the match in the rendered page to highlight");
+		if (!ok) {
+			console.debug("PDF Search: could not find the match in the rendered page to highlight");
+			return;
+		}
+		if (token !== this.highlightToken) return;
+		this.stopKeeping = keepHighlight(pdfLeaf.view.containerEl, page, query, occurrence);
+		this.keptFilePath = file.path;
+	}
+
+	stopKeepingHighlight() {
+		this.stopKeeping?.();
+		this.stopKeeping = null;
+		this.keptFilePath = "";
 	}
 
 	removeNavBars() {
@@ -300,6 +319,7 @@ export default class PdfSearchPlugin extends Plugin {
 		button("x", "Close", () => {
 			this.nav = null;
 			this.removeNavBars();
+			this.stopKeepingHighlight();
 			clearHighlights(host);
 		});
 

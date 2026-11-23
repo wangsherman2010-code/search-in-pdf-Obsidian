@@ -154,3 +154,32 @@ export function highlightWhenReady(
 		tick();
 	});
 }
+
+/**
+ * Keep a highlight on screen when the viewer redraws the page (zooming,
+ * rotating, or scrolling far away and back makes pdf.js rebuild the page and
+ * drop anything we added). Watches the viewer and redraws the highlight,
+ * without scrolling, whenever the page is ready again and the highlight is
+ * gone. Returns a function that stops watching.
+ */
+export function keepHighlight(container: HTMLElement, page: number, query: string, occurrence: number): () => void {
+	let timer = 0;
+	const check = () => {
+		timer = 0;
+		const pageEl = container.querySelector<HTMLElement>(`.page[data-page-number="${page}"]`);
+		if (!pageEl || !textLayerReady(pageEl)) return;
+		if (pageEl.querySelector("." + HIT_CLASS)) return;
+		// The page was redrawn: remove any stale layer elsewhere and draw again.
+		clearHighlights(container);
+		container.querySelectorAll("." + LAYER_CLASS).forEach((el) => el.remove());
+		highlightInPage(pageEl, query, occurrence);
+	};
+	const observer = new MutationObserver(() => {
+		if (!timer) timer = window.setTimeout(check, 120);
+	});
+	observer.observe(container, { childList: true, subtree: true });
+	return () => {
+		observer.disconnect();
+		if (timer) window.clearTimeout(timer);
+	};
+}

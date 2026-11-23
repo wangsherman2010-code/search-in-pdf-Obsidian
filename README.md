@@ -11,7 +11,7 @@ Open a note that embeds or links a PDF, run **Search PDFs in current note**, sta
 - If a note has several PDFs, you can search all of them or pick one from a dropdown.
 - If the open file is a PDF itself, it searches that PDF.
 - Shows results as you type, with the page number and a highlighted snippet.
-- Tap or click a result to open the PDF at that page, with the matched words **highlighted** on the page. If the PDF is already open in a tab, that tab is reused.
+- Tap or click a result to open the PDF at that page, with the matched words **highlighted** on the page. The highlight stays in place when you zoom in or out. If the PDF is already open in a tab, that tab is reused.
 - Finds phrases even when the PDF breaks them across lines, and handles Chinese text where PDFs often insert stray spaces. You can turn this off in settings.
 - After you open a result, a **◀ 3 / 12 ▶** bar over the PDF steps through every match: across pages, and across PDFs when the note has several. It also has buttons to go back to the results list or close the bar.
 - **Go to next match** and **Go to previous match** commands, for hotkeys (for example `F3` / `Shift+F3`) or the mobile toolbar.
