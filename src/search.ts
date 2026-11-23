@@ -6,6 +6,14 @@ export interface PageText {
 	/** 1-based page number */
 	page: number;
 	text: string;
+	/**
+	 * Where each pdf.js text item starts in `text`, and its length. Used to turn a
+	 * match into Obsidian's `#page=N&selection=a,b,c,d` link, which highlights the
+	 * words in the PDF viewer. Items are counted the same way as the viewer's text
+	 * layer counts them.
+	 */
+	itemStarts?: number[];
+	itemLens?: number[];
 }
 
 export interface Match {
@@ -47,7 +55,8 @@ export function normalize(text: string, ignoreWhitespace: boolean): Normalized {
 			continue;
 		}
 		lastWasSpace = false;
-		const lc = ch.toLowerCase();
+		// NFKC folds ligatures (ﬁ → fi) and full-width forms so they match plain typing.
+		const lc = ch.normalize("NFKC").toLowerCase();
 		for (let j = 0; j < lc.length; j++) {
 			out.push(lc[j]);
 			map.push(i);
@@ -109,4 +118,37 @@ export function makeSnippet(text: string, start: number, end: number, context: n
 		match: flat(text.slice(start, end)),
 		after: flat(text.slice(end, to)).trimEnd() + (to < text.length ? "…" : ""),
 	};
+}
+
+/** Index of the text item that contains `offset`, or -1 if it falls between items. */
+function itemAt(starts: number[], lens: number[], offset: number): number {
+	let lo = 0;
+	let hi = starts.length - 1;
+	while (lo <= hi) {
+		const mid = (lo + hi) >> 1;
+		if (offset < starts[mid]) hi = mid - 1;
+		else if (offset >= starts[mid] + lens[mid]) lo = mid + 1;
+		else return mid;
+	}
+	return -1;
+}
+
+/**
+ * Convert a match to the `selection=startItem,startOffset,endItem,endOffset`
+ * value that Obsidian's PDF viewer uses to highlight text. Returns null when the
+ * page has no item information.
+ */
+export function toSelection(page: PageText, start: number, end: number): string | null {
+	const starts = page.itemStarts;
+	const lens = page.itemLens;
+	if (!starts || !lens || !starts.length || end <= start) return null;
+	// Move inwards past characters we added ourselves (line breaks between items).
+	let s = start;
+	while (s < end && itemAt(starts, lens, s) === -1) s++;
+	let e = end - 1;
+	while (e >= s && itemAt(starts, lens, e) === -1) e--;
+	if (s > e) return null;
+	const si = itemAt(starts, lens, s);
+	const ei = itemAt(starts, lens, e);
+	return `${si},${s - starts[si]},${ei},${e - starts[ei] + 1}`;
 }

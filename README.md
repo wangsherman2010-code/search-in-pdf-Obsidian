@@ -11,7 +11,7 @@ Open a note that embeds or links a PDF, run **Search PDFs in current note**, sta
 - If a note has several PDFs, you can search all of them or pick one from a dropdown.
 - If the open file is a PDF itself, it searches that PDF.
 - Shows results as you type, with the page number and a highlighted snippet.
-- Tap or click a result to open the PDF at that page. If the PDF is already open in a tab, that tab is reused.
+- Tap or click a result to open the PDF at that page, with the matched words **highlighted** on the page. If the PDF is already open in a tab, that tab is reused.
 - Finds phrases even when the PDF breaks them across lines, and handles Chinese text where PDFs often insert stray spaces. You can turn this off in settings.
 - Remembers your last search for the note, so you can jump to a page, come back and pick the next result.
 - Warns you when a PDF is a scanned image with no text layer (it needs OCR first).
@@ -51,6 +51,7 @@ Press **Enter** to open the first result.
 | Ignore spaces and line breaks | On | Robust matching across line wraps and for Chinese text. Turn off to match spacing exactly. |
 | Maximum results | 300 | Stops after this many matches. |
 | Snippet length | 50 | Characters of context shown on each side of a match. |
+| Highlight the match in the PDF | On | Selects the matched words when a result opens. |
 | Open results in a new tab (desktop) | On | On mobile, results open in the current tab. Use Back to return. |
 
 ## Notes

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import * as assert from "node:assert/strict";
-import { findMatches, makeSnippet } from "./search";
+import { findMatches, makeSnippet, toSelection } from "./search";
 
 const pages = [
 	{ page: 1, text: "Assertiveness is a\nskill you can learn." },
@@ -42,4 +42,21 @@ test("snippet", () => {
 	const [m] = findMatches(pages, "skill", true);
 	const s = makeSnippet(t, m.start, m.end, 5);
 	assert.deepEqual(s, { before: "…is a ", match: "skill", after: " you…" });
+});
+
+test("ligatures match plain letters", () => {
+	const m = findMatches([{ page: 1, text: "ﬁnd the ﬁle" }], "file", true);
+	assert.equal(m.length, 1);
+});
+
+test("selection link spans text items and skips added line breaks", () => {
+	// items: "Eye contact builds trust with your" (EOL) "audience in every speech."
+	const a = "Eye contact builds trust with your";
+	const b = "audience in every speech.";
+	const page = { page: 1, text: a + "\n" + b, itemStarts: [0, a.length + 1], itemLens: [a.length, b.length] };
+	const [m] = findMatches([page], "your audience", true);
+	assert.equal(toSelection(page, m.start, m.end), `0,${a.length - 4},1,8`);
+	const [m2] = findMatches([page], "contact", true);
+	assert.equal(toSelection(page, m2.start, m2.end), "0,4,0,11");
+	assert.equal(toSelection({ page: 1, text: "x" }, 0, 1), null);
 });

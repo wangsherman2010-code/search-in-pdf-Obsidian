@@ -13,13 +13,14 @@ import {
 	getLinkpath,
 	loadPdfJs,
 } from "obsidian";
-import { Match, PageText, findMatches, makeSnippet } from "./search";
+import { Match, PageText, findMatches, makeSnippet, toSelection } from "./search";
 
 interface PdfSearchSettings {
 	ignoreWhitespace: boolean;
 	maxResults: number;
 	snippetContext: number;
 	openInNewTab: boolean;
+	highlightInPdf: boolean;
 }
 
 const DEFAULT_SETTINGS: PdfSearchSettings = {
@@ -27,6 +28,7 @@ const DEFAULT_SETTINGS: PdfSearchSettings = {
 	maxResults: 300,
 	snippetContext: 50,
 	openInNewTab: true,
+	highlightInPdf: true,
 };
 
 interface PdfIndex {
@@ -132,14 +134,20 @@ export default class PdfSearchPlugin extends Plugin {
 				const total: number = doc.numPages;
 				for (let i = 1; i <= total; i++) {
 					const page = await doc.getPage(i);
-					const content = await page.getTextContent();
+					// disableNormalization matches how the PDF viewer's text layer reads the page,
+					// so item indices and offsets line up for highlighting.
+					const content = await page.getTextContent({ disableNormalization: true });
 					let text = "";
+					const itemStarts: number[] = [];
+					const itemLens: number[] = [];
 					for (const item of content.items as Array<{ str?: string; hasEOL?: boolean }>) {
 						if (typeof item.str !== "string") continue;
+						itemStarts.push(text.length);
+						itemLens.push(item.str.length);
 						text += item.str;
 						if (item.hasEOL) text += "\n";
 					}
-					pages.push({ page: i, text });
+					pages.push({ page: i, text, itemStarts, itemLens });
 					page.cleanup();
 					onProgress?.(file, i, total);
 				}
@@ -156,8 +164,8 @@ export default class PdfSearchPlugin extends Plugin {
 		return job;
 	}
 
-	async openResult(file: TFile, page: number, sourcePath: string) {
-		const subpath = `#page=${page}`;
+	async openResult(file: TFile, page: number, sourcePath: string, selection: string | null) {
+		const subpath = `#page=${page}` + (selection && this.settings.highlightInPdf ? `&selection=${selection}` : "");
 		// Reuse a tab that already shows this PDF.
 		let existing: WorkspaceLeaf | null = null;
 		this.app.workspace.iterateAllLeaves((leaf) => {
@@ -355,7 +363,9 @@ class PdfSearchModal extends Modal {
 			snip.appendText(s.after);
 			const open = () => {
 				this.close();
-				this.plugin.openResult(file, m.page, this.note.path);
+				const pageText = idx.pages.find((p) => p.page === m.page);
+				const selection = pageText ? toSelection(pageText, m.start, m.end) : null;
+				this.plugin.openResult(file, m.page, this.note.path, selection);
 			};
 			row.addEventListener("click", open);
 			row.addEventListener("keydown", (e) => {
@@ -414,6 +424,16 @@ class PdfSearchSettingTab extends PluginSettingTab {
 						this.plugin.settings.snippetContext = v;
 						await this.plugin.saveSettings();
 					}),
+			);
+
+		new Setting(containerEl)
+			.setName("Highlight the match in the PDF")
+			.setDesc("When you open a result, select the matched words on the page.")
+			.addToggle((t) =>
+				t.setValue(this.plugin.settings.highlightInPdf).onChange(async (v) => {
+					this.plugin.settings.highlightInPdf = v;
+					await this.plugin.saveSettings();
+				}),
 			);
 
 		new Setting(containerEl)
