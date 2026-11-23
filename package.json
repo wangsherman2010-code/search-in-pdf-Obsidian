@@ -1,6 +1,6 @@
 {
   "name": "pdf-search-in-note",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "description": "Obsidian plugin: search inside the PDFs linked or embedded in the current note (desktop and mobile).",
   "main": "main.js",
   "scripts": {

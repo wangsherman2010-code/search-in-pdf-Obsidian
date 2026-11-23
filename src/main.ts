@@ -18,6 +18,7 @@ import {
 } from "obsidian";
 import { Match, PageText, findMatches, fingerprint, makeSnippet } from "./search";
 import { TextStore } from "./store";
+import { PROTECTED, findBottomBarSearchButtons } from "./navbar";
 import { clearHighlights, highlightWhenReady, keepHighlight } from "./highlight";
 
 interface PdfSearchSettings {
@@ -469,29 +470,14 @@ export default class PdfSearchPlugin extends Plugin {
 		}
 	}
 
-	/** Magnifying-glass icons sitting in the bar along the bottom of the screen (not in dialogs or the PDF). */
-	private bottomBarSearchIcons(): SVGElement[] {
-		const h = window.innerHeight;
-		const out: SVGElement[] = [];
-		document.querySelectorAll<SVGElement>("svg").forEach((svg) => {
-			const cls = svg.getAttribute("class") ?? "";
-			if (!/(^|\s)(lucide-)?search(\s|$)/.test(cls)) return;
-			if (svg.closest(".modal-container, .pdf-search-nav, .mobile-toolbar, .pdf-toolbar, .menu, .suggestion-container")) return;
-			const r = svg.getBoundingClientRect();
-			if (!r.width || r.top < h - 160) return;
-			out.push(svg);
-		});
-		return out;
-	}
-
-	/** Hide Obsidian's search button in the mobile bottom bar, found by its icon and position. */
+	/** Hide Obsidian's search button in the mobile bottom bar (see navbar.ts for how it is found). */
 	hideNavbarSearchButtons() {
+		// Un-hide anything we hid in a place that should never be touched (e.g. the sidebar menu).
+		document.querySelectorAll("." + HIDDEN_BTN_CLASS).forEach((el) => {
+			if (el.closest(PROTECTED)) el.removeClass(HIDDEN_BTN_CLASS);
+		});
 		if (!Platform.isMobile || !this.settings.hideMobileSearchButton) return;
-		for (const svg of this.bottomBarSearchIcons()) {
-			const btn = (svg.closest("button, .clickable-icon, [role='button'], .mobile-navbar-action") ??
-				svg.parentElement) as HTMLElement | null;
-			btn?.addClass(HIDDEN_BTN_CLASS);
-		}
+		for (const btn of findBottomBarSearchButtons(document, window.innerHeight)) btn.addClass(HIDDEN_BTN_CLASS);
 	}
 
 	/** For troubleshooting: describe what is in the bottom bar and copy it to the clipboard. */

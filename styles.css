@@ -156,12 +156,7 @@
 	padding: 10px;
 }
 
-/* Optional: hide Obsidian's own search button (magnifying glass) in the
-   mobile bottom bar. Matched by its icon, not its position. */
-body.pdf-search-hide-navbar-search.is-mobile .mobile-navbar-action:has(svg.lucide-search),
-body.pdf-search-hide-navbar-search.is-mobile .mobile-navbar-action:has(svg.search) {
-	display: none;
-}
+/* Obsidian's search button in the mobile bottom bar, when the setting is on (found in navbar.ts) */
 .pdf-search-hidden-navbar-btn {
 	display: none !important;
 }
