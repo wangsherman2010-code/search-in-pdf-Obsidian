@@ -67,4 +67,4 @@ npm run build   # produces main.js
 npm run dev     # rebuilds on change
 ```
 
-To publish a new version, bump `version` in `manifest.json`, `package.json` and `versions.json`, commit, and push a tag with the same number (for example `0.1.1`). GitHub Actions builds the files and creates the release.
+To publish a new version, bump `version` in `manifest.json`, `package.json` and `versions.json`, then commit and push to `main`. GitHub Actions builds the plugin and creates a release for that version automatically.

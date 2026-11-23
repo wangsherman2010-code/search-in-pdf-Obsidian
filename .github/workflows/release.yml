@@ -1,31 +1,40 @@
 name: Release plugin
 
+# Publishes a GitHub release (main.js, manifest.json, styles.css) for the
+# version in manifest.json whenever that version has no release yet.
+# Runs on every push to main, or manually from the Actions tab.
 on:
   push:
-    tags:
-      - "*"
+    branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
-  build:
+  release:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
-      - name: Build
+      - name: Build and test
         run: |
-          npm install
+          npm ci
           npm test
           npm run build
-      - name: Create release
+      - name: Create release if this version is new
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          tag="${GITHUB_REF#refs/tags/}"
-          gh release create "$tag" \
-            --title="$tag" \
+          version=$(node -p "require('./manifest.json').version")
+          if gh release view "$version" >/dev/null 2>&1; then
+            echo "Release $version already exists, nothing to do."
+            exit 0
+          fi
+          gh release create "$version" \
+            --target "$GITHUB_SHA" \
+            --title "$version" \
+            --notes "PDF Search in Note $version" \
             main.js manifest.json styles.css
