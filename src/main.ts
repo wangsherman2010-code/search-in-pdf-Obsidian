@@ -10,6 +10,8 @@ import {
 	TFile,
 	WorkspaceLeaf,
 	debounce,
+	ItemView,
+	View,
 	setIcon,
 	getLinkpath,
 	loadPdfJs,
@@ -26,6 +28,7 @@ interface PdfSearchSettings {
 	highlightInPdf: boolean;
 	navAtTop: boolean;
 	hideMobileSearchButton: boolean;
+	showHeaderButton: boolean;
 	saveExtractedText: boolean;
 }
 
@@ -37,6 +40,7 @@ const DEFAULT_SETTINGS: PdfSearchSettings = {
 	highlightInPdf: true,
 	navAtTop: false,
 	hideMobileSearchButton: false,
+	showHeaderButton: true,
 	saveExtractedText: true,
 };
 
@@ -85,6 +89,28 @@ export default class PdfSearchPlugin extends Plugin {
 		this.applyBodyClasses();
 
 		this.addRibbonIcon("file-search", "Search PDFs in this note", () => this.openSearch());
+
+		// "Search PDFs in this note" in the tab's ⋮ menu and the file's right-click menu.
+		this.registerEvent(
+			this.app.workspace.on("file-menu", (menu, file) => {
+				if (!(file instanceof TFile) || this.getPdfsFor(file).pdfs.length === 0) return;
+				menu.addItem((item) =>
+					item
+						.setTitle("Search PDFs in this note")
+						.setIcon("file-search")
+						.setSection("action")
+						.onClick(() => this.openSearch(file)),
+				);
+			}),
+		);
+
+		// A button in the top-right of the tab, shown when the note has PDFs.
+		const refresh = () => this.refreshHeaderButtons();
+		this.app.workspace.onLayoutReady(refresh);
+		this.registerEvent(this.app.workspace.on("layout-change", refresh));
+		this.registerEvent(this.app.workspace.on("active-leaf-change", refresh));
+		this.registerEvent(this.app.workspace.on("file-open", refresh));
+		this.registerEvent(this.app.metadataCache.on("resolved", refresh));
 
 		this.addCommand({
 			id: "search-pdfs-in-note",
@@ -149,6 +175,7 @@ export default class PdfSearchPlugin extends Plugin {
 	}
 
 	onunload() {
+		this.removeHeaderButtons();
 		document.body.removeClass(HIDE_SEARCH_CLASS);
 		document.querySelectorAll("." + HIDDEN_BTN_CLASS).forEach((el) => el.removeClass(HIDDEN_BTN_CLASS));
 		this.cache.clear();
@@ -159,7 +186,11 @@ export default class PdfSearchPlugin extends Plugin {
 
 	/** PDFs embedded (![[x.pdf]]) or linked ([[x.pdf]], [x](x.pdf)) in the active note, in order of appearance. */
 	getPdfsForActiveNote(): { note: TFile | null; pdfs: TFile[] } {
-		const note = this.app.workspace.getActiveFile();
+		return this.getPdfsFor(this.app.workspace.getActiveFile());
+	}
+
+	/** PDFs embedded or linked in `note` (or the note itself if it is a PDF). */
+	getPdfsFor(note: TFile | null): { note: TFile | null; pdfs: TFile[] } {
 		if (!note) return { note: null, pdfs: [] };
 		if (note.extension.toLowerCase() === "pdf") return { note, pdfs: [note] };
 
@@ -179,8 +210,47 @@ export default class PdfSearchPlugin extends Plugin {
 		return { note, pdfs: [...found.values()] };
 	}
 
-	openSearch() {
-		const { note, pdfs } = this.getPdfsForActiveNote();
+	private headerButtons = new Map<View, { el: HTMLElement; path: string }>();
+
+	/** Add or remove the header 🔍 button on each open note / PDF tab. */
+	refreshHeaderButtons() {
+		const seen = new Set<View>();
+		this.app.workspace.iterateAllLeaves((leaf) => {
+			const view = leaf.view;
+			const type = view.getViewType();
+			if (type !== "markdown" && type !== "pdf") return;
+			seen.add(view);
+			const file = (view as { file?: TFile | null }).file ?? null;
+			const want = this.settings.showHeaderButton && !!file && this.getPdfsFor(file).pdfs.length > 0;
+			const have = this.headerButtons.get(view);
+			if (have && (!want || have.path !== file?.path || !have.el.isConnected)) {
+				have.el.remove();
+				this.headerButtons.delete(view);
+			}
+			if (want && file && !this.headerButtons.has(view)) {
+				const el = (view as ItemView).addAction("file-search", "Search PDFs in this note", () => {
+					const f = (view as { file?: TFile | null }).file;
+					if (f) this.openSearch(f);
+				});
+				el.addClass("pdf-search-header-btn");
+				this.headerButtons.set(view, { el, path: file.path });
+			}
+		});
+		for (const [view, b] of this.headerButtons) {
+			if (!seen.has(view)) {
+				b.el.remove();
+				this.headerButtons.delete(view);
+			}
+		}
+	}
+
+	removeHeaderButtons() {
+		for (const b of this.headerButtons.values()) b.el.remove();
+		this.headerButtons.clear();
+	}
+
+	openSearch(file?: TFile) {
+		const { note, pdfs } = file ? this.getPdfsFor(file) : this.getPdfsForActiveNote();
 		if (!note) {
 			new Notice("Open a note first.");
 			return;
@@ -742,6 +812,17 @@ class PdfSearchSettingTab extends PluginSettingTab {
 			}),
 		);
 		refreshStats();
+
+		new Setting(containerEl)
+			.setName("Show a search button in the note's header")
+			.setDesc("Adds a 🔍 button at the top right of notes that contain PDFs.")
+			.addToggle((t) =>
+				t.setValue(this.plugin.settings.showHeaderButton).onChange(async (v) => {
+					this.plugin.settings.showHeaderButton = v;
+					await this.plugin.saveSettings();
+					this.plugin.refreshHeaderButtons();
+				}),
+			);
 
 		new Setting(containerEl)
 			.setName("Hide Obsidian's search button in the mobile bottom bar")

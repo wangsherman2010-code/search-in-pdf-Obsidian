@@ -39,6 +39,8 @@ If you use Obsidian Sync or another sync service that syncs the `.obsidian` fold
 
 ## How to use
 
+- **Header button:** tap the 🔍 icon at the top right of any note that contains a PDF.
+- **⋮ menu:** choose **Search PDFs in this note** from the tab's ⋮ menu, or right-click the file.
 - **Ribbon icon:** tap the 🔍 file-search icon. On Android it's in the left sidebar or the toolbar menu.
 - **Command palette:** run **PDF Search in Note: Search PDFs in current note**.
 - **Mobile toolbar:** *Settings → Toolbar* lets you add the command for one-tap access.
@@ -54,6 +56,7 @@ Press **Enter** to open the first result. Then use the **◀ ▶** bar at the bo
 | Maximum results | 300 | Stops after this many matches. |
 | Snippet length | 50 | Characters of context shown on each side of a match. |
 | Highlight the match in the PDF | On | Selects the matched words when a result opens. |
+| Show a search button in the note's header | On | Adds a 🔍 button at the top right of notes that contain PDFs. |
 | Hide Obsidian's search button in the mobile bottom bar | Off | Hides the magnifying glass in Obsidian's bottom bar on phones, which searches the vault rather than the PDF. |
 | Save extracted text | On | Keeps each PDF's text so later searches start instantly. *Clear saved text* frees the space. |
 | Open results in a new tab (desktop) | On | On mobile, results open in the current tab. Use Back to return. |
