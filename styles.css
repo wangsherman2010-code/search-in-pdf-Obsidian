@@ -148,6 +148,10 @@
 	text-overflow: ellipsis;
 	max-width: 12em;
 }
+.pdf-search-nav.is-top {
+	bottom: auto;
+	top: 56px;
+}
 .is-mobile .pdf-search-nav-btn {
 	padding: 10px;
 }

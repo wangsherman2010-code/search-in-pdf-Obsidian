@@ -23,6 +23,7 @@ interface PdfSearchSettings {
 	snippetContext: number;
 	openInNewTab: boolean;
 	highlightInPdf: boolean;
+	navAtTop: boolean;
 }
 
 const DEFAULT_SETTINGS: PdfSearchSettings = {
@@ -31,6 +32,7 @@ const DEFAULT_SETTINGS: PdfSearchSettings = {
 	snippetContext: 50,
 	openInNewTab: true,
 	highlightInPdf: true,
+	navAtTop: false,
 };
 
 interface PdfIndex {
@@ -300,6 +302,24 @@ export default class PdfSearchPlugin extends Plugin {
 			this.removeNavBars();
 			clearHighlights(host);
 		});
+
+		// On phones, Obsidian's bottom toolbar floats over the bottom of the view,
+		// so put the bar at the top, just under the PDF viewer's own toolbar.
+		if (Platform.isMobile || this.settings.navAtTop) {
+			bar.addClass("is-top");
+			const place = () => {
+				if (!bar.isConnected) return;
+				const hostTop = host.getBoundingClientRect().top;
+				const anchor =
+					host.querySelector(".pdf-toolbar") ?? host.querySelector(".view-header") ?? null;
+				const below = anchor ? anchor.getBoundingClientRect().bottom - hostTop : 0;
+				bar.style.top = Math.max(0, below) + 8 + "px";
+			};
+			place();
+			// The PDF toolbar may not have been laid out yet right after opening.
+			window.setTimeout(place, 300);
+			window.setTimeout(place, 1200);
+		}
 	}
 
 	/** The leaf showing this PDF, preferring the active one. */
@@ -573,6 +593,16 @@ class PdfSearchSettingTab extends PluginSettingTab {
 			.addToggle((t) =>
 				t.setValue(this.plugin.settings.highlightInPdf).onChange(async (v) => {
 					this.plugin.settings.highlightInPdf = v;
+					await this.plugin.saveSettings();
+				}),
+			);
+
+		new Setting(containerEl)
+			.setName("Show the Previous / Next bar at the top (desktop)")
+			.setDesc("On mobile it is always at the top, so Obsidian's bottom toolbar does not cover it.")
+			.addToggle((t) =>
+				t.setValue(this.plugin.settings.navAtTop).onChange(async (v) => {
+					this.plugin.settings.navAtTop = v;
 					await this.plugin.saveSettings();
 				}),
 			);
