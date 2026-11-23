@@ -55,11 +55,12 @@ Press **Enter** to open the first result. Then use the **◀ ▶** bar at the bo
 | Snippet length | 50 | Characters of context shown on each side of a match. |
 | Highlight the match in the PDF | On | Selects the matched words when a result opens. |
 | Hide Obsidian's search button in the mobile bottom bar | Off | Hides the magnifying glass in Obsidian's bottom bar on phones, which searches the vault rather than the PDF. |
+| Save extracted text | On | Keeps each PDF's text so later searches start instantly. *Clear saved text* frees the space. |
 | Open results in a new tab (desktop) | On | On mobile, results open in the current tab. Use Back to return. |
 
 ## Notes
 
-- The first search in a PDF reads its text. Large PDFs can take a few seconds on a phone, and a progress message shows while this happens. After that, searches are instant until you close Obsidian.
+- The first search in a PDF reads its text. Large PDFs can take a few seconds on a phone, and a progress message shows while this happens. The text is then saved in `.obsidian/plugins/pdf-search-in-note/saved-text/`, so later searches are instant, even after a restart. Saved text is matched by a fingerprint of the PDF's contents, so it carries across synced devices and renames, and an edited PDF is read again automatically. You can clear it in settings at any time.
 - Scanned PDFs need a text layer. Run OCR on them first, for example with Adobe Acrobat, or with OCRmyPDF on a PC.
 
 ## Development

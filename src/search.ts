@@ -112,3 +112,22 @@ export function makeSnippet(text: string, start: number, end: number, context: n
 	};
 }
 
+
+/**
+ * Fingerprint of a file's bytes (two independent 32-bit hashes plus the size).
+ * Used to name saved text, so the same PDF matches on every device and after
+ * renames, and an edited PDF gets a new fingerprint. Not for security.
+ */
+export function fingerprint(data: ArrayBuffer): string {
+	const bytes = new Uint8Array(data);
+	let h1 = 0x811c9dc5; // FNV-1a
+	let h2 = 0x9e3779b9; // a second, differently mixed hash
+	for (let i = 0; i < bytes.length; i++) {
+		const b = bytes[i];
+		h1 = Math.imul(h1 ^ b, 0x01000193);
+		h2 = Math.imul(h2 ^ b, 0x5bd1e995);
+		h2 ^= h2 >>> 15;
+	}
+	const hex = (n: number) => (n >>> 0).toString(16).padStart(8, "0");
+	return `${hex(h1)}${hex(h2)}-${bytes.length.toString(16)}`;
+}

@@ -14,7 +14,8 @@ import {
 	getLinkpath,
 	loadPdfJs,
 } from "obsidian";
-import { Match, PageText, findMatches, makeSnippet } from "./search";
+import { Match, PageText, findMatches, fingerprint, makeSnippet } from "./search";
+import { TextStore } from "./store";
 import { clearHighlights, highlightWhenReady, keepHighlight } from "./highlight";
 
 interface PdfSearchSettings {
@@ -25,6 +26,7 @@ interface PdfSearchSettings {
 	highlightInPdf: boolean;
 	navAtTop: boolean;
 	hideMobileSearchButton: boolean;
+	saveExtractedText: boolean;
 }
 
 const DEFAULT_SETTINGS: PdfSearchSettings = {
@@ -35,6 +37,7 @@ const DEFAULT_SETTINGS: PdfSearchSettings = {
 	highlightInPdf: true,
 	navAtTop: false,
 	hideMobileSearchButton: false,
+	saveExtractedText: true,
 };
 
 interface PdfIndex {
@@ -71,12 +74,14 @@ export default class PdfSearchPlugin extends Plugin {
 	lastNotePath = "";
 	nav: NavState | null = null;
 	private highlightToken = 0;
+	store!: TextStore;
 	/** stops re-drawing the current highlight after zoom; null when nothing is kept */
 	private stopKeeping: (() => void) | null = null;
 	private keptFilePath = "";
 
 	async onload() {
 		await this.loadSettings();
+		this.store = new TextStore(this.app.vault.adapter, `${this.manifest.dir ?? this.app.vault.configDir + "/plugins/" + this.manifest.id}/saved-text`);
 		this.applyBodyClasses();
 
 		this.addRibbonIcon("file-search", "Search PDFs in this note", () => this.openSearch());
@@ -201,8 +206,17 @@ export default class PdfSearchPlugin extends Plugin {
 		if (running) return running;
 
 		const job = (async () => {
-			const pdfjs = await loadPdfJs();
 			const data = await this.app.vault.readBinary(file);
+			const key = fingerprint(data);
+			if (this.settings.saveExtractedText) {
+				const saved = await this.store.load(key);
+				if (saved) {
+					const index: PdfIndex = { mtime: file.stat.mtime, size: file.stat.size, pages: saved };
+					this.cache.set(file.path, index);
+					return index;
+				}
+			}
+			const pdfjs = await loadPdfJs();
 			const doc = await pdfjs.getDocument({ data: new Uint8Array(data) }).promise;
 			const pages: PageText[] = [];
 			try {
@@ -226,6 +240,7 @@ export default class PdfSearchPlugin extends Plugin {
 			}
 			const index: PdfIndex = { mtime: file.stat.mtime, size: file.stat.size, pages };
 			this.cache.set(file.path, index);
+			if (this.settings.saveExtractedText) await this.store.save(key, file.path, file.stat.size, pages);
 			return index;
 		})();
 
@@ -696,6 +711,37 @@ class PdfSearchSettingTab extends PluginSettingTab {
 					await this.plugin.saveSettings();
 				}),
 			);
+
+		new Setting(containerEl)
+			.setName("Save extracted text")
+			.setDesc(
+				"Remember each PDF's text after the first search, so later searches start instantly, even after restarting Obsidian. If your vault's .obsidian folder syncs between devices, text read on one device is reused on the others.",
+			)
+			.addToggle((t) =>
+				t.setValue(this.plugin.settings.saveExtractedText).onChange(async (v) => {
+					this.plugin.settings.saveExtractedText = v;
+					await this.plugin.saveSettings();
+				}),
+			);
+
+		const storeSetting = new Setting(containerEl).setName("Saved text").setDesc("Checking…");
+		const refreshStats = async () => {
+			const { count, bytes } = await this.plugin.store.stats();
+			const mb = bytes / (1024 * 1024);
+			storeSetting.setDesc(
+				count
+					? `${count} PDF${count === 1 ? "" : "s"} saved, ${mb < 0.1 ? "<0.1" : mb.toFixed(1)} MB. Clearing is safe: PDFs are simply read again next time.`
+					: "Nothing saved yet.",
+			);
+		};
+		storeSetting.addButton((b) =>
+			b.setButtonText("Clear saved text").onClick(async () => {
+				await this.plugin.store.clear();
+				new Notice("Saved PDF text cleared.");
+				refreshStats();
+			}),
+		);
+		refreshStats();
 
 		new Setting(containerEl)
 			.setName("Hide Obsidian's search button in the mobile bottom bar")

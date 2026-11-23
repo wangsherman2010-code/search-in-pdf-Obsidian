@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import * as assert from "node:assert/strict";
-import { findMatches, makeSnippet } from "./search";
+import { findMatches, makeSnippet, fingerprint } from "./search";
 
 const pages = [
 	{ page: 1, text: "Assertiveness is a\nskill you can learn." },
@@ -49,3 +49,10 @@ test("ligatures match plain letters", () => {
 	assert.equal(m.length, 1);
 });
 
+
+test("fingerprint is stable and changes with content", () => {
+	const enc = (t: string) => new TextEncoder().encode(t).buffer as ArrayBuffer;
+	assert.equal(fingerprint(enc("same pdf bytes")), fingerprint(enc("same pdf bytes")));
+	assert.notEqual(fingerprint(enc("same pdf bytes")), fingerprint(enc("same pdf bytez")));
+	assert.match(fingerprint(enc("abc")), /^[0-9a-f]{16}-3$/);
+});
