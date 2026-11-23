@@ -13,7 +13,9 @@ Open a note that embeds or links a PDF, run **Search PDFs in current note**, sta
 - Shows results as you type, with the page number and a highlighted snippet.
 - Tap or click a result to open the PDF at that page, with the matched words **highlighted** on the page. If the PDF is already open in a tab, that tab is reused.
 - Finds phrases even when the PDF breaks them across lines, and handles Chinese text where PDFs often insert stray spaces. You can turn this off in settings.
-- Remembers your last search for the note, so you can jump to a page, come back and pick the next result.
+- After you open a result, a **◀ 3 / 12 ▶** bar over the PDF steps through every match: across pages, and across PDFs when the note has several. It also has buttons to go back to the results list or close the bar.
+- **Go to next match** and **Go to previous match** commands, for hotkeys (for example `F3` / `Shift+F3`) or the mobile toolbar.
+- Remembers your last search for the note.
 - Warns you when a PDF is a scanned image with no text layer (it needs OCR first).
 
 ## Install
@@ -42,7 +44,7 @@ If you use Obsidian Sync or another sync service that syncs the `.obsidian` fold
 - **Mobile toolbar:** *Settings → Toolbar* lets you add the command for one-tap access.
 - **Desktop hotkey:** *Settings → Hotkeys* lets you bind a hotkey, for example `Ctrl+Shift+F`.
 
-Press **Enter** to open the first result.
+Press **Enter** to open the first result. Then use the **◀ ▶** bar at the bottom of the PDF to move between matches.
 
 ## Settings
 

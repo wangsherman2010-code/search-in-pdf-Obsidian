@@ -10,11 +10,12 @@ import {
 	TFile,
 	WorkspaceLeaf,
 	debounce,
+	setIcon,
 	getLinkpath,
 	loadPdfJs,
 } from "obsidian";
 import { Match, PageText, findMatches, makeSnippet } from "./search";
-import { highlightWhenReady } from "./highlight";
+import { clearHighlights, highlightWhenReady } from "./highlight";
 
 interface PdfSearchSettings {
 	ignoreWhitespace: boolean;
@@ -40,6 +41,23 @@ interface PdfIndex {
 
 type Progress = (file: TFile, done: number, total: number) => void;
 
+/** One search result, in the order shown in the results list. */
+interface ResultRef {
+	file: TFile;
+	page: number;
+	/** which match on its page this is (0 = first) */
+	occurrence: number;
+}
+
+/** The result list you are stepping through with the Previous / Next bar. */
+interface NavState {
+	results: ResultRef[];
+	index: number;
+	query: string;
+	note: TFile;
+	pdfs: TFile[];
+}
+
 export default class PdfSearchPlugin extends Plugin {
 	settings: PdfSearchSettings = DEFAULT_SETTINGS;
 	private cache = new Map<string, PdfIndex>();
@@ -47,6 +65,8 @@ export default class PdfSearchPlugin extends Plugin {
 	/** remembered so re-opening the search after jumping to a page keeps your results */
 	lastQuery = "";
 	lastNotePath = "";
+	nav: NavState | null = null;
+	private highlightToken = 0;
 
 	async onload() {
 		await this.loadSettings();
@@ -63,7 +83,35 @@ export default class PdfSearchPlugin extends Plugin {
 			},
 		});
 
+		this.addCommand({
+			id: "next-match",
+			name: "Go to next match",
+			checkCallback: (checking) => {
+				if (!this.nav) return false;
+				if (!checking) this.goToResult(this.nav.index + 1);
+				return true;
+			},
+		});
+
+		this.addCommand({
+			id: "previous-match",
+			name: "Go to previous match",
+			checkCallback: (checking) => {
+				if (!this.nav) return false;
+				if (!checking) this.goToResult(this.nav.index - 1);
+				return true;
+			},
+		});
+
 		this.addSettingTab(new PdfSearchSettingTab(this.app, this));
+
+		// Hide the Previous / Next bar when you leave the PDFs you were searching.
+		this.registerEvent(
+			this.app.workspace.on("file-open", (file) => {
+				if (!this.nav) return;
+				if (!file || !this.nav.results.some((r) => r.file.path === file.path)) this.removeNavBars();
+			}),
+		);
 
 		const invalidate = (f: TAbstractFile, oldPath?: string) => {
 			this.cache.delete(f.path);
@@ -76,6 +124,8 @@ export default class PdfSearchPlugin extends Plugin {
 
 	onunload() {
 		this.cache.clear();
+		this.removeNavBars();
+		document.querySelectorAll(".pdf-search-hit-layer").forEach((el) => el.remove());
 	}
 
 	/** PDFs embedded (![[x.pdf]]) or linked ([[x.pdf]], [x](x.pdf)) in the active note, in order of appearance. */
@@ -160,8 +210,25 @@ export default class PdfSearchPlugin extends Plugin {
 		return job;
 	}
 
+	/** Start stepping through `results` from `index` (called when you tap a result). */
+	startNavigation(results: ResultRef[], index: number, query: string, note: TFile, pdfs: TFile[]) {
+		this.nav = { results, index, query, note, pdfs };
+		return this.goToResult(index);
+	}
+
+	/** Open result `i` of the current list. Wraps around at either end. */
+	async goToResult(i: number) {
+		const nav = this.nav;
+		if (!nav || !nav.results.length) return;
+		const n = nav.results.length;
+		nav.index = ((i % n) + n) % n;
+		const r = nav.results[nav.index];
+		await this.openResult(r.file, r.page, nav.note.path, nav.query, r.occurrence);
+	}
+
 	/** Open the PDF at `page`, then highlight the `occurrence`-th match of `query` on that page. */
 	async openResult(file: TFile, page: number, sourcePath: string, query: string, occurrence: number) {
+		const token = ++this.highlightToken;
 		const subpath = `#page=${page}`;
 		// Reuse a tab that already shows this PDF.
 		let existing: WorkspaceLeaf | null = null;
@@ -177,12 +244,62 @@ export default class PdfSearchPlugin extends Plugin {
 			const newTab = this.settings.openInNewTab && !Platform.isMobile ? "tab" : false;
 			await this.app.workspace.openLinkText(file.path + subpath, sourcePath, newTab);
 		}
-		if (!this.settings.highlightInPdf) return;
-
 		const pdfLeaf = this.findPdfLeaf(file);
 		if (!pdfLeaf) return;
-		const ok = await highlightWhenReady(pdfLeaf.view.containerEl, page, query, occurrence);
+		if (this.nav) this.showNavBar(pdfLeaf);
+		if (!this.settings.highlightInPdf) return;
+
+		const ok = await highlightWhenReady(
+			pdfLeaf.view.containerEl,
+			page,
+			query,
+			occurrence,
+			8000,
+			() => token === this.highlightToken,
+		);
 		if (!ok) console.debug("PDF Search: could not find the match in the rendered page to highlight");
+	}
+
+	removeNavBars() {
+		document.querySelectorAll(".pdf-search-nav").forEach((el) => el.remove());
+	}
+
+	/** Floating "◀ 3 / 12 ▶" bar over the PDF. */
+	private showNavBar(leaf: WorkspaceLeaf) {
+		this.removeNavBars();
+		const nav = this.nav;
+		if (!nav) return;
+		const host = leaf.view.containerEl;
+		host.addClass("pdf-search-nav-host");
+		const bar = host.createDiv({ cls: "pdf-search-nav" });
+		const button = (icon: string, label: string, onClick: () => void) => {
+			const b = bar.createEl("button", { cls: "clickable-icon pdf-search-nav-btn", attr: { "aria-label": label } });
+			setIcon(b, icon);
+			b.addEventListener("click", (e) => {
+				e.preventDefault();
+				e.stopPropagation();
+				onClick();
+			});
+		};
+		const current = nav.results[nav.index];
+		const manyPdfs = new Set(nav.results.map((r) => r.file.path)).size > 1;
+
+		button("chevron-left", "Previous match", () => this.goToResult(nav.index - 1));
+		const label = bar.createDiv({ cls: "pdf-search-nav-label" });
+		label.createDiv({ cls: "pdf-search-nav-count", text: `${nav.index + 1} / ${nav.results.length}` });
+		label.createDiv({
+			cls: "pdf-search-nav-where",
+			text: (manyPdfs ? current.file.basename + " · " : "") + `p. ${current.page}`,
+		});
+		button("chevron-right", "Next match", () => this.goToResult(nav.index + 1));
+		button("list", "Back to search results", () => {
+			new PdfSearchModal(this.app, this, nav.note, nav.pdfs).open();
+		});
+		button("x", "Close", () => {
+			this.nav = null;
+			this.removeNavBars();
+			clearHighlights(host);
+		});
 	}
 
 	/** The leaf showing this PDF, preferring the active one. */
@@ -218,6 +335,8 @@ class PdfSearchModal extends Modal {
 	private failed = new Map<string, string>();
 	private progress = new Map<string, string>();
 	private searchToken = 0;
+	/** every result currently listed, in order, for Previous / Next */
+	private results: ResultRef[] = [];
 
 	constructor(
 		app: App,
@@ -315,6 +434,7 @@ class PdfSearchModal extends Modal {
 		const query = this.inputEl.value;
 		const { ignoreWhitespace, maxResults, snippetContext } = this.plugin.settings;
 		this.resultsEl.empty();
+		this.results = [];
 
 		const files = this.selectedPdfs();
 		for (const f of files) {
@@ -374,6 +494,8 @@ class PdfSearchModal extends Modal {
 			// Which match on its page this is (0 = first), so the right one gets highlighted.
 			const occurrence = seenOnPage.get(m.page) ?? 0;
 			seenOnPage.set(m.page, occurrence + 1);
+			const resultIndex = this.results.length;
+			this.results.push({ file, page: m.page, occurrence });
 			const text = byPage.get(m.page) ?? "";
 			const s = makeSnippet(text, m.start, m.end, context);
 			const row = group.createDiv({ cls: "pdf-search-result", attr: { tabindex: "0", role: "button" } });
@@ -384,7 +506,7 @@ class PdfSearchModal extends Modal {
 			snip.appendText(s.after);
 			const open = () => {
 				this.close();
-				this.plugin.openResult(file, m.page, this.note.path, query, occurrence);
+				this.plugin.startNavigation(this.results.slice(), resultIndex, query, this.note, this.pdfs);
 			};
 			row.addEventListener("click", open);
 			row.addEventListener("keydown", (e) => {

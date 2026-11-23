@@ -125,10 +125,16 @@ export function highlightWhenReady(
 	query: string,
 	occurrence: number,
 	timeoutMs = 8000,
+	isCurrent: () => boolean = () => true,
 ): Promise<boolean> {
 	const deadline = Date.now() + timeoutMs;
 	return new Promise((resolve) => {
 		const tick = () => {
+			// A newer jump (e.g. tapping Next quickly) has taken over.
+			if (!isCurrent()) {
+				resolve(false);
+				return;
+			}
 			const pageEl = container.querySelector<HTMLElement>(`.page[data-page-number="${page}"]`);
 			if (pageEl && textLayerReady(pageEl)) {
 				clearHighlights(container);

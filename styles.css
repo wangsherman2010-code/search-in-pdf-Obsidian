@@ -107,3 +107,47 @@
 	0% { box-shadow: 0 0 0 6px rgba(255, 208, 0, 0.6); }
 	100% { box-shadow: 0 0 0 2px rgba(255, 208, 0, 0.45); }
 }
+
+/* Previous / Next bar shown over the PDF */
+.pdf-search-nav-host {
+	position: relative;
+}
+.pdf-search-nav {
+	position: absolute;
+	left: 50%;
+	transform: translateX(-50%);
+	bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+	display: flex;
+	align-items: center;
+	gap: 2px;
+	padding: 4px 6px;
+	background: var(--background-primary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 999px;
+	box-shadow: var(--shadow-l);
+	z-index: 30;
+	max-width: calc(100% - 24px);
+}
+.pdf-search-nav-label {
+	text-align: center;
+	padding: 0 6px;
+	min-width: 5em;
+	line-height: 1.15;
+	overflow: hidden;
+}
+.pdf-search-nav-count {
+	font-weight: var(--font-semibold);
+	font-variant-numeric: tabular-nums;
+	font-size: var(--font-ui-small);
+}
+.pdf-search-nav-where {
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	max-width: 12em;
+}
+.is-mobile .pdf-search-nav-btn {
+	padding: 10px;
+}
