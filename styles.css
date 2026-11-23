@@ -80,3 +80,30 @@
 .is-mobile .pdf-search-results {
 	max-height: 50vh;
 }
+
+/* Highlight drawn over the matched words inside the PDF viewer */
+.pdf-search-hit-layer {
+	position: absolute;
+	inset: 0;
+	pointer-events: none;
+	z-index: 5;
+}
+.pdf-search-hit {
+	position: absolute;
+	background: rgba(255, 208, 0, 0.45);
+	mix-blend-mode: multiply;
+	border-radius: 2px;
+	pointer-events: none;
+	z-index: 5;
+	box-shadow: 0 0 0 2px rgba(255, 208, 0, 0.45);
+	animation: pdf-search-pulse 1.2s ease-out 1;
+}
+.theme-dark .pdf-search-hit {
+	mix-blend-mode: normal;
+	background: rgba(255, 208, 0, 0.4);
+	box-shadow: 0 0 0 2px rgba(255, 208, 0, 0.4);
+}
+@keyframes pdf-search-pulse {
+	0% { box-shadow: 0 0 0 6px rgba(255, 208, 0, 0.6); }
+	100% { box-shadow: 0 0 0 2px rgba(255, 208, 0, 0.45); }
+}

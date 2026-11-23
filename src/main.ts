@@ -13,7 +13,8 @@ import {
 	getLinkpath,
 	loadPdfJs,
 } from "obsidian";
-import { Match, PageText, findMatches, makeSnippet, toSelection } from "./search";
+import { Match, PageText, findMatches, makeSnippet } from "./search";
+import { highlightWhenReady } from "./highlight";
 
 interface PdfSearchSettings {
 	ignoreWhitespace: boolean;
@@ -134,20 +135,15 @@ export default class PdfSearchPlugin extends Plugin {
 				const total: number = doc.numPages;
 				for (let i = 1; i <= total; i++) {
 					const page = await doc.getPage(i);
-					// disableNormalization matches how the PDF viewer's text layer reads the page,
-					// so item indices and offsets line up for highlighting.
+					// disableNormalization reads the text the same way the PDF viewer's text layer does.
 					const content = await page.getTextContent({ disableNormalization: true });
 					let text = "";
-					const itemStarts: number[] = [];
-					const itemLens: number[] = [];
 					for (const item of content.items as Array<{ str?: string; hasEOL?: boolean }>) {
 						if (typeof item.str !== "string") continue;
-						itemStarts.push(text.length);
-						itemLens.push(item.str.length);
 						text += item.str;
 						if (item.hasEOL) text += "\n";
 					}
-					pages.push({ page: i, text, itemStarts, itemLens });
+					pages.push({ page: i, text });
 					page.cleanup();
 					onProgress?.(file, i, total);
 				}
@@ -164,8 +160,9 @@ export default class PdfSearchPlugin extends Plugin {
 		return job;
 	}
 
-	async openResult(file: TFile, page: number, sourcePath: string, selection: string | null) {
-		const subpath = `#page=${page}` + (selection && this.settings.highlightInPdf ? `&selection=${selection}` : "");
+	/** Open the PDF at `page`, then highlight the `occurrence`-th match of `query` on that page. */
+	async openResult(file: TFile, page: number, sourcePath: string, query: string, occurrence: number) {
+		const subpath = `#page=${page}`;
 		// Reuse a tab that already shows this PDF.
 		let existing: WorkspaceLeaf | null = null;
 		this.app.workspace.iterateAllLeaves((leaf) => {
@@ -176,10 +173,29 @@ export default class PdfSearchPlugin extends Plugin {
 			const leaf = existing as WorkspaceLeaf;
 			await leaf.openFile(file, { active: true, eState: { subpath } });
 			this.app.workspace.setActiveLeaf(leaf, { focus: true });
-			return;
+		} else {
+			const newTab = this.settings.openInNewTab && !Platform.isMobile ? "tab" : false;
+			await this.app.workspace.openLinkText(file.path + subpath, sourcePath, newTab);
 		}
-		const newTab = this.settings.openInNewTab && !Platform.isMobile ? "tab" : false;
-		await this.app.workspace.openLinkText(file.path + subpath, sourcePath, newTab);
+		if (!this.settings.highlightInPdf) return;
+
+		const pdfLeaf = this.findPdfLeaf(file);
+		if (!pdfLeaf) return;
+		const ok = await highlightWhenReady(pdfLeaf.view.containerEl, page, query, occurrence);
+		if (!ok) console.debug("PDF Search: could not find the match in the rendered page to highlight");
+	}
+
+	/** The leaf showing this PDF, preferring the active one. */
+	private findPdfLeaf(file: TFile): WorkspaceLeaf | null {
+		const isIt = (leaf: WorkspaceLeaf | null) =>
+			!!leaf && leaf.view.getViewType() === "pdf" && (leaf.view as { file?: TFile }).file?.path === file.path;
+		const active = this.app.workspace.getMostRecentLeaf();
+		if (isIt(active)) return active;
+		let found: WorkspaceLeaf | null = null;
+		this.app.workspace.iterateAllLeaves((leaf) => {
+			if (!found && isIt(leaf)) found = leaf;
+		});
+		return found;
 	}
 
 	async loadSettings() {
@@ -352,7 +368,12 @@ class PdfSearchModal extends Modal {
 		const group = this.resultsEl.createDiv({ cls: "pdf-search-group" });
 		if (showHeader) group.createDiv({ cls: "pdf-search-group-title", text: `${file.basename} (${matches.length})` });
 		const byPage = new Map(idx.pages.map((p) => [p.page, p.text]));
+		const query = this.inputEl.value;
+		const seenOnPage = new Map<number, number>();
 		for (const m of matches) {
+			// Which match on its page this is (0 = first), so the right one gets highlighted.
+			const occurrence = seenOnPage.get(m.page) ?? 0;
+			seenOnPage.set(m.page, occurrence + 1);
 			const text = byPage.get(m.page) ?? "";
 			const s = makeSnippet(text, m.start, m.end, context);
 			const row = group.createDiv({ cls: "pdf-search-result", attr: { tabindex: "0", role: "button" } });
@@ -363,9 +384,7 @@ class PdfSearchModal extends Modal {
 			snip.appendText(s.after);
 			const open = () => {
 				this.close();
-				const pageText = idx.pages.find((p) => p.page === m.page);
-				const selection = pageText ? toSelection(pageText, m.start, m.end) : null;
-				this.plugin.openResult(file, m.page, this.note.path, selection);
+				this.plugin.openResult(file, m.page, this.note.path, query, occurrence);
 			};
 			row.addEventListener("click", open);
 			row.addEventListener("keydown", (e) => {
