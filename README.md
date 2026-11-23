@@ -54,6 +54,7 @@ Press **Enter** to open the first result. Then use the **◀ ▶** bar at the bo
 | Maximum results | 300 | Stops after this many matches. |
 | Snippet length | 50 | Characters of context shown on each side of a match. |
 | Highlight the match in the PDF | On | Selects the matched words when a result opens. |
+| Hide Obsidian's search button in the mobile bottom bar | Off | Hides the magnifying glass in Obsidian's bottom bar on phones, which searches the vault rather than the PDF. |
 | Open results in a new tab (desktop) | On | On mobile, results open in the current tab. Use Back to return. |
 
 ## Notes

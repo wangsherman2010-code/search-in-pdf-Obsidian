@@ -24,6 +24,7 @@ interface PdfSearchSettings {
 	openInNewTab: boolean;
 	highlightInPdf: boolean;
 	navAtTop: boolean;
+	hideMobileSearchButton: boolean;
 }
 
 const DEFAULT_SETTINGS: PdfSearchSettings = {
@@ -33,6 +34,7 @@ const DEFAULT_SETTINGS: PdfSearchSettings = {
 	openInNewTab: true,
 	highlightInPdf: true,
 	navAtTop: false,
+	hideMobileSearchButton: false,
 };
 
 interface PdfIndex {
@@ -75,6 +77,7 @@ export default class PdfSearchPlugin extends Plugin {
 
 	async onload() {
 		await this.loadSettings();
+		this.applyBodyClasses();
 
 		this.addRibbonIcon("file-search", "Search PDFs in this note", () => this.openSearch());
 
@@ -130,6 +133,7 @@ export default class PdfSearchPlugin extends Plugin {
 	}
 
 	onunload() {
+		document.body.removeClass(HIDE_SEARCH_CLASS);
 		this.cache.clear();
 		this.removeNavBars();
 		this.stopKeepingHighlight();
@@ -355,6 +359,11 @@ export default class PdfSearchPlugin extends Plugin {
 		return found;
 	}
 
+	/** Turn on or off the CSS that hides Obsidian's search button in the mobile bottom bar. */
+	applyBodyClasses() {
+		document.body.toggleClass(HIDE_SEARCH_CLASS, this.settings.hideMobileSearchButton);
+	}
+
 	async loadSettings() {
 		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
 	}
@@ -365,6 +374,7 @@ export default class PdfSearchPlugin extends Plugin {
 }
 
 const ALL = "__all__";
+const HIDE_SEARCH_CLASS = "pdf-search-hide-navbar-search";
 
 class PdfSearchModal extends Modal {
 	private inputEl!: HTMLInputElement;
@@ -613,6 +623,19 @@ class PdfSearchSettingTab extends PluginSettingTab {
 			.addToggle((t) =>
 				t.setValue(this.plugin.settings.highlightInPdf).onChange(async (v) => {
 					this.plugin.settings.highlightInPdf = v;
+					await this.plugin.saveSettings();
+				}),
+			);
+
+		new Setting(containerEl)
+			.setName("Hide Obsidian's search button in the mobile bottom bar")
+			.setDesc(
+				"The magnifying glass in Obsidian's bottom bar on phones searches your vault, not the PDF. Turn this on to hide it. Has no effect on desktop.",
+			)
+			.addToggle((t) =>
+				t.setValue(this.plugin.settings.hideMobileSearchButton).onChange(async (v) => {
+					this.plugin.settings.hideMobileSearchButton = v;
+					this.plugin.applyBodyClasses();
 					await this.plugin.saveSettings();
 				}),
 			);
