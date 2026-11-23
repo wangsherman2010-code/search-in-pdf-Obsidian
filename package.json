@@ -1,0 +1,21 @@
+{
+  "name": "pdf-search-in-note",
+  "version": "0.1.0",
+  "description": "Obsidian plugin: search inside the PDFs linked or embedded in the current note (desktop and mobile).",
+  "main": "main.js",
+  "scripts": {
+    "dev": "node esbuild.config.mjs",
+    "build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
+    "test": "node esbuild.config.mjs test && node --test test-dist/search.test.js"
+  },
+  "keywords": ["obsidian", "pdf", "search"],
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "builtin-modules": "^3.3.0",
+    "esbuild": "^0.20.0",
+    "obsidian": "latest",
+    "tslib": "^2.6.2",
+    "typescript": "^5.3.3"
+  }
+}
